@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 
-import { Card, Deck, Hand, rankToValue } from "../Types/types";
+import { Card, Deck, Hand, rankToValue, setGameOver } from "../Types/types";
 
 const deck: Deck = [];
 const playerHand: Hand = {cards: [], totalScore: 0, aceCount: 0, isBust: false, isSoft: false};
@@ -9,7 +9,7 @@ const dealerHand: Hand = {cards: [], totalScore: 0, aceCount: 0, isBust: false, 
 function shuffleDeck(deck: Deck)
 {
     const suits: Card["suit"][] = ["spades" , "hearts" , "diamonds" , "clubs"];
-    const ranks: Card["rank"][] = ['2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' , '10' , 'J' , 'Q' , 'K' , 'A'];
+    const ranks: Card["rank"][] = ['2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' , '10' , 'jack' , 'queen' , 'king' , 'ace'];
 
     for(const suit of suits)
     {
@@ -59,6 +59,8 @@ function resetGame()
 
     playerHand.isBust = false;
     dealerHand.isBust = false;
+
+    setGameOver(false);
 }
 export function startGame(req: Request, res: Response)
 {
@@ -75,7 +77,7 @@ export function startGame(req: Request, res: Response)
             res.sendStatus(400);
             return;
         } 
-        if(card.rank === 'A') playerHand.aceCount++;
+        if(card.rank === 'ace') playerHand.aceCount++;
         playerHand.cards.push(card);
 
         card = deck.pop()!;
@@ -84,7 +86,7 @@ export function startGame(req: Request, res: Response)
             res.sendStatus(400);
             return;
         } 
-        if(card.rank === 'A') dealerHand.aceCount++;
+        if(card.rank === 'ace') dealerHand.aceCount++;
         dealerHand.cards.push(card);
     }
 
@@ -119,6 +121,7 @@ export function hit(req: Request, res: Response)
     if(playerHand.totalScore > 21)
     {
         playerHand.isBust = true;
+        setGameOver(true);
 
         return res.status(200).json({
             message: "You Busted! You Lose! Would you like to play again?",
@@ -146,6 +149,8 @@ export function stand(req: Request, res: Response)
             error: "Deck is empty. Cannot draw more cards."
         });
     } 
+
+    setGameOver(true);
 
     while(dealerHand.totalScore < 17)
     {
