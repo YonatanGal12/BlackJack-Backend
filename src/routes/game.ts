@@ -1,5 +1,5 @@
 import express from 'express';
-import { startGame, hit, stand } from '../logic/blackjack';
+import { startGame, hit, stand } from '../Logic/blackjack';
 import { checkGameOver } from '../Middleware/checkGameOver';
 const router = express.Router();
 

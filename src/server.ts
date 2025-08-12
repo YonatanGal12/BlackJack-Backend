@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import router from './routes/game'; 
+import router from './Routes/game'; 
 
 const app = express();
 app.use(cors());
