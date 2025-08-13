@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { isGameOver } from "../Types/types";
+import { isGameOver } from "../types/types";
 
 export function checkGameOver(req: Request, res: Response, next: NextFunction)
 {

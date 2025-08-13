@@ -18,6 +18,8 @@ export const rankToValue: Record<Rank, number> = {
     'ace': 11
 };
 
+rankToValue[10]=9
+
 export type Card = {
     suit: Suit,
     rank: Rank,
