@@ -1,12 +1,57 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 
-import { Card, Deck, Hand, rankToValue, setGameOver, Suit, Rank } from "../types/types";
+import { Card, Deck, Hand, rankToValue, Suit, Rank} from "../types/types";
 
-const deck: Deck = [];
-const playerHand: Hand = {cards: [], totalScore: 0, aceCount: 0, isBust: false, isSoft: false};
-const dealerHand: Hand = {cards: [], totalScore: 0, aceCount: 0, isBust: false, isSoft: false};
+let deck: Deck = [];
+let playerHand: Hand = {cards: [], totalScore: 0, aceCount: 0};
+let dealerHand: Hand = {cards: [], totalScore: 0, aceCount: 0,};
+let isGameGoing: boolean = false;
 
-function shuffleDeck(deck: Deck)
+
+export function checkGameOver(req: Request, res: Response, next: NextFunction)
+{
+    console.log(isGameGoing)
+    if(!isGameGoing)
+    {
+        return res.status(400).json({error: "Game is already over."});
+    }
+    next();
+}
+
+/*export function resumeGame(req: Request, res: Response) {
+
+    if(deck.length === 0)
+    {
+        return res.status(200).json("Server already updated")
+    }
+    const { playerHand: Player, dealerHand: Dealer, isGameGoing: ig, phase } = req.body;
+
+    shuffleDeck(deck);
+
+    deck = deck.filter(
+        (card) => !Player.some((u: Card) => u.rank === card.rank && u.suit === card.suit)
+    );
+
+    deck = deck.filter(
+        (card) => !Dealer.some((u: Card) => u.rank === card.rank && u.suit === card.suit)
+    );
+
+    playerHand.cards.length = 0;
+    playerHand.cards.push(...Player);
+
+    dealerHand.cards.length = 0;
+    dealerHand.cards.push(...Dealer);
+
+    isGameGoing = ig;
+
+    res.status(200).json({
+        message: "Game resumed",
+    });
+}*/
+
+
+
+function shuffleDeck(deck: Deck): void
 {
     const suits: Suit[] = ["spades" , "hearts" , "diamonds" , "clubs"];
     const ranks: Rank[] = ['2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' , '10' , 'jack' , 'queen' , 'king' , 'ace'];
@@ -33,10 +78,12 @@ function findTotalScore(hand: Hand): number
 
     if(totalScore <= 21) return totalScore;
 
-    while(totalScore > 21 && hand.aceCount > 0)
+    let aceCount = hand.cards.filter(card => card.rank === "ace").length;
+
+    while(totalScore > 21 && aceCount > 0)
     {
         totalScore -= 10;
-        hand.aceCount--;
+        aceCount--;
     }
 
     return totalScore;
@@ -57,16 +104,15 @@ function resetGame(): void
     playerHand.aceCount = 0;
     dealerHand.aceCount = 0;
 
-    playerHand.isBust = false;
-    dealerHand.isBust = false;
-
-    setGameOver(false);
+    isGameGoing = true;
 }
+
+
+
 export function startGame(req: Request, res: Response)
 {
-    if(deck.length > 0)
-        resetGame();
-
+    resetGame();
+    console.log(isGameGoing)
     shuffleDeck(deck);
 
     for(let i = 0; i < 2; i++)
@@ -92,7 +138,7 @@ export function startGame(req: Request, res: Response)
         if(dealerHand.totalScore === 21)
         {
             return res.status(200).json({
-                message: "It's a tie! Blackjack!",
+                message: "Blackjack! It's a push! Would you like to play again?",
                 playerHand: playerHand.cards,
                 dealerHand: dealerHand.cards,
                 playerScore: playerHand.totalScore,
@@ -101,7 +147,7 @@ export function startGame(req: Request, res: Response)
             });
         }
         return res.status(200).json({
-            message: "You win! Blackjack!",
+            message: "Blackjack! You win! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
@@ -109,6 +155,18 @@ export function startGame(req: Request, res: Response)
             remainingCards: deck.length
         });
     }
+    else if(dealerHand.totalScore === 21)
+    {
+        return res.status(200).json({
+            message: "Dealer Blackjacked! You Lose! Would you like to play again?",
+            playerHand: playerHand.cards,
+            dealerHand: dealerHand.cards,
+            playerScore: playerHand.totalScore,
+            dealerScore: dealerHand.totalScore,
+            remainingCards: deck.length
+        });
+    }
+
     return res.status(200).json({
         message: "Game Started!",
         playerHand: playerHand.cards,
@@ -136,11 +194,10 @@ export function hit(req: Request, res: Response)
     playerHand.cards.push(card);
 
     playerHand.totalScore = findTotalScore(playerHand);
-
+    console.log(playerHand.totalScore)
     if(playerHand.totalScore > 21)
     {
-        playerHand.isBust = true;
-        setGameOver(true);
+        isGameGoing = false;
 
         return res.status(200).json({
             message: "You Busted! You Lose! Would you like to play again?",
@@ -151,10 +208,18 @@ export function hit(req: Request, res: Response)
             remainingCards: deck.length
         });
     }
+    else if(playerHand.totalScore === 21)
+    {
+        stand(req, res);
+    }
 
     return res.status(200).json({
         message: "Hit Successful!",
         playerHand: playerHand.cards,
+        dealerHand: [
+            dealerHand.cards[0],
+            {suit: "hidden", value: "hidden"}
+        ],
         playerScore: playerHand.totalScore,
         remainingCards: deck.length
     });
@@ -167,7 +232,7 @@ export function stand(req: Request, res: Response)
         return res.send("Something went wrong when giving out cards.");
     } 
 
-    setGameOver(true);
+    isGameGoing = false;
 
     while(dealerHand.totalScore < 17)
     {
@@ -184,8 +249,6 @@ export function stand(req: Request, res: Response)
 
     if(dealerHand.totalScore > 21)
     {
-        dealerHand.isBust = true;
-
         return res.status(200).json({
             message: "Dealer Busted! You Win! Would you like to play again?",
             playerHand: playerHand.cards,
@@ -196,7 +259,7 @@ export function stand(req: Request, res: Response)
         });
     }
 
-    if(playerHand.totalScore >= dealerHand.totalScore)
+    if(playerHand.totalScore > dealerHand.totalScore)
     {
         return res.status(200).json({
             message: "Game Over! You Win! Would you like to play again?",
@@ -220,7 +283,14 @@ export function stand(req: Request, res: Response)
     }
     else
     {
-        //Implement tie logic when there are bets, for now you win
+        return res.status(200).json({
+            message: "Game Over! It's a push! Would you like to play again?",
+            playerHand: playerHand.cards,
+            dealerHand: dealerHand.cards,
+            playerScore: playerHand.totalScore,
+            dealerScore: dealerHand.totalScore,
+            remainingCards: deck.length
+        });
     }
 }
 
@@ -240,8 +310,7 @@ export function double(req: Request, res: Response)
 
     if(playerHand.totalScore > 21)
     {
-        playerHand.isBust = true;
-        setGameOver(true);
+        isGameGoing = false;
 
         return res.status(200).json({
             message: "You Busted! You Lose! Would you like to play again?",
@@ -258,7 +327,7 @@ export function double(req: Request, res: Response)
         return res.send("Something went wrong when giving out cards.");
     } 
 
-    setGameOver(true);
+    isGameGoing = false;
 
     while(dealerHand.totalScore < 17)
     {
@@ -275,8 +344,6 @@ export function double(req: Request, res: Response)
 
     if(dealerHand.totalScore > 21)
     {
-        dealerHand.isBust = true;
-
         return res.status(200).json({
             message: "Dealer Busted! You Win! Would you like to play again?",
             playerHand: playerHand.cards,
@@ -311,7 +378,14 @@ export function double(req: Request, res: Response)
     }
     else
     {
-        //Implement tie logic when there are bets, for now you win
+        return res.status(200).json({
+            message: "Game Over! It's a push! Would you like to play again?",
+            playerHand: playerHand.cards,
+            dealerHand: dealerHand.cards,
+            playerScore: playerHand.totalScore,
+            dealerScore: dealerHand.totalScore,
+            remainingCards: deck.length
+        });
     }
 
 }

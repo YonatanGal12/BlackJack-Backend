@@ -18,7 +18,6 @@ export const rankToValue: Record<Rank, number> = {
     'ace': 11
 };
 
-rankToValue[10]=9
 
 export type Card = {
     suit: Suit,
@@ -31,13 +30,6 @@ export type Hand = {
     cards: Card[],
     totalScore: number,
     aceCount: number,
-    isBust: boolean,
-    isSoft: boolean
 }
 
-export let isGameOver: boolean = false;
 
-export function setGameOver(value: boolean)
-{
-    isGameOver = value;
-}
