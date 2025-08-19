@@ -25,7 +25,6 @@ export function resumeGame(req: Request, res: Response)
     deck = [];
     shuffleDeck(deck);
 
-
     playerHand.cards = [...player];
     playerHand.aceCount = 0;
     playerHand.cards.forEach((c) => {if(c.rank === "ace") playerHand.aceCount++;});
@@ -67,7 +66,7 @@ export function resumeGame(req: Request, res: Response)
     totalMoney = total;
     currentBet = current;
 
-    res.status(200).json({
+    return res.status(200).json({
         message: msg,
         playerHand: playerHand.cards,
         dealerHand: isGameGoing ? [
@@ -88,7 +87,7 @@ export function resetMoney(req: Request, res: Response)
     totalMoney = 100;
     currentBet = 50;
 
-    res.status(200).json({
+    return res.status(200).json({
         totalMoney: totalMoney,
         currentBet: currentBet
     })
@@ -97,9 +96,6 @@ export function resetMoney(req: Request, res: Response)
 export function betting(req: Request, res: Response)
 {
     const {amount} = req.body;
-
-    console.log("Amount: " + amount);
-    console.log("Total money: " + totalMoney);
 
     if (amount <= 0) 
     {
@@ -110,14 +106,13 @@ export function betting(req: Request, res: Response)
 
     if (amount > totalMoney) 
     {
-        console.log("somehow here");
         return res.status(400).json({ message: "Not enough money" });
     }
 
     currentBet = amount;
     totalMoney -= amount;
 
-    res.status(200).json({
+    return res.status(200).json({
         message: "Bet placed",
         currentBet,
         totalMoney,
@@ -139,7 +134,7 @@ function shuffleDeck(deck: Deck): void
         }
     }
 
-    for(let i = deck.length -1; i > 0; i--)
+    for(let i = deck.length - 1; i > 0; i--)
     {
         const j = Math.floor(Math.random() * (i + 1));
         [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -163,14 +158,22 @@ function findTotalScore(hand: Hand): number
     return totalScore;
 }
 
+export function restartAll(req: Request, res: Response)
+{
+    deck = [];
+    playerHand = {cards: [], totalScore: 0, aceCount: 0};
+    dealerHand = {cards: [], totalScore: 0, aceCount: 0,};
+    isGameGoing = false;
+    totalMoney = 100;
+    currentBet = 0;
+}
+
 function resetGame(): void
 {
-    while(deck.length > 0)
-        deck.pop();
-    while(playerHand.cards.length > 0)
-        playerHand.cards.pop();
-    while(dealerHand.cards.length > 0)
-        dealerHand.cards.pop();
+    deck = [];
+
+    playerHand.cards = [];
+    dealerHand.cards = [];
 
     playerHand.totalScore = 0;
     dealerHand.totalScore = 0;
@@ -185,7 +188,7 @@ function calculateBetting(isBlackJack: boolean = false, isWin: boolean = false, 
 {
     if(isWin && isBlackJack)
     {
-        totalMoney += currentBet * (2.5);
+        totalMoney += Math.floor(currentBet * (2.5));
     }
     else if(isWin)
     {
@@ -202,7 +205,6 @@ function calculateBetting(isBlackJack: boolean = false, isWin: boolean = false, 
 export function startGame(req: Request, res: Response)
 {
     resetGame();
-    console.log("blah" + isGameGoing)
     shuffleDeck(deck);
 
     for(let i = 0; i < 2; i++)
@@ -292,7 +294,7 @@ export function hit(req: Request, res: Response)
     playerHand.cards.push(card);
 
     playerHand.totalScore = findTotalScore(playerHand);
-    console.log("pop" + playerHand.totalScore)
+
     if(playerHand.totalScore > 21)
     {
         isGameGoing = false;
@@ -411,7 +413,7 @@ export function double(req: Request, res: Response)
     const doubledBet = currentBet * 2;
     if(doubledBet > totalMoney + currentBet)
     {
-        res.status(400).json("Not enough money to double.");
+        return res.status(400).json("Not enough money to double.");
     }
 
     currentBet = doubledBet;
@@ -501,7 +503,7 @@ export function double(req: Request, res: Response)
     }
     else
     {
-         calculateBetting(false, false, true);
+        calculateBetting(false, false, true);
         return res.status(200).json({
             message: "Game Over! It's a push! Would you like to play again?",
             playerHand: playerHand.cards,
@@ -512,5 +514,4 @@ export function double(req: Request, res: Response)
             totalMoney: totalMoney
         });
     }
-
 }

@@ -1,9 +1,9 @@
 import express from 'express';
-import { startGame, hit, stand, double, resumeGame, betting, resetMoney} from '../logic/gameLogic';
+import { startGame, hit, stand, double, resumeGame, betting, resetMoney, restartAll} from '../logic/gameLogic';
 import { checkGameOver } from '../logic/gameLogic';
 const router = express.Router();
 
-router.get("/start", startGame);
+router.post("/start", startGame);
 
 router.get("/hit", checkGameOver, hit);
 
@@ -11,10 +11,12 @@ router.get("/stand", checkGameOver, stand);
 
 router.get("/double",checkGameOver, double);
 
-router.post("/betting", betting);
+router.patch("/betting", betting);
 
-router.post("/resume", resumeGame);
+router.patch("/resume", resumeGame);
 
-router.post("/resetMoney", resetMoney);
+router.patch("/resetMoney", resetMoney);
+
+router.patch("/restartAll", restartAll);
 
 export default router;

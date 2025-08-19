@@ -4,7 +4,10 @@ import router from './routes/game';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:3000",
+  methods: ["GET", "POST", "PATCH"]
+}));
 
 app.use(express.json());
 
