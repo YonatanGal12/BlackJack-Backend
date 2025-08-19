@@ -6,11 +6,11 @@ let deck: Deck = [];
 let playerHand: Hand = {cards: [], totalScore: 0, aceCount: 0};
 let dealerHand: Hand = {cards: [], totalScore: 0, aceCount: 0,};
 let isGameGoing: boolean = false;
-
+let totalMoney: number = 100;
+let currentBet: number = 0;
 
 export function checkGameOver(req: Request, res: Response, next: NextFunction)
 {
-    console.log(isGameGoing)
     if(!isGameGoing)
     {
         return res.status(400).json({error: "Game is already over."});
@@ -18,44 +18,118 @@ export function checkGameOver(req: Request, res: Response, next: NextFunction)
     next();
 }
 
-/*export function resumeGame(req: Request, res: Response) {
+export function resumeGame(req: Request, res: Response) 
+{
+    const { playerHand: player, dealerHand: dealer, phase: phase, totalMoney: total, currentBet: current, message: msg } = req.body;
 
-    if(deck.length === 0)
-    {
-        return res.status(200).json("Server already updated")
-    }
-    const { playerHand: Player, dealerHand: Dealer, isGameGoing: ig, phase } = req.body;
-
+    deck = [];
     shuffleDeck(deck);
 
+
+    playerHand.cards = [...player];
+    playerHand.aceCount = 0;
+    playerHand.cards.forEach((c) => {if(c.rank === "ace") playerHand.aceCount++;});
+    playerHand.totalScore = findTotalScore(playerHand);
+
+
+    dealerHand.cards = [...dealer];
+    dealerHand.aceCount = 0;
+    dealerHand.cards = dealerHand.cards.filter((card) => card.suit !== "hidden");
+
+    if(phase === "playing")
+    {
+        isGameGoing = true;
+
+        const c = deck.pop();
+        if(!c)
+        {
+            return res.status(400).json("Something went wrong.");
+        }
+        dealerHand.cards.push(c);
+        dealerHand.cards.forEach((c) => {if(c.rank === "ace") dealerHand.aceCount++});
+        dealerHand.totalScore = findTotalScore(dealerHand);
+    }
+    
+    
     deck = deck.filter(
-        (card) => !Player.some((u: Card) => u.rank === card.rank && u.suit === card.suit)
+        (card) => !player.some((u: Card) => u.rank === card.rank && u.suit === card.suit)
+    );
+    deck = deck.filter(
+        (card) => !dealer.some((u: Card) => u.rank === card.rank && u.suit === card.suit)
     );
 
-    deck = deck.filter(
-        (card) => !Dealer.some((u: Card) => u.rank === card.rank && u.suit === card.suit)
-    );
+    if(phase === "betting")
+    {
+        deck = [];
+        shuffleDeck(deck);
+    }
 
-    playerHand.cards.length = 0;
-    playerHand.cards.push(...Player);
-
-    dealerHand.cards.length = 0;
-    dealerHand.cards.push(...Dealer);
-
-    isGameGoing = ig;
+    totalMoney = total;
+    currentBet = current;
 
     res.status(200).json({
-        message: "Game resumed",
+        message: msg,
+        playerHand: playerHand.cards,
+        dealerHand: isGameGoing ? [
+            dealerHand.cards[0],
+            {suit: "hidden", rank: "hidden"}
+        ] : dealerHand.cards,
+        playerScore: playerHand.totalScore,
+        dealerScore: isGameGoing ? "?" : dealerHand.totalScore,
+        remainingCards: deck.length,
+        totalMoney: totalMoney,
+        currentBet: currentBet,
+        phase: phase
     });
-}*/
+}
 
+export function resetMoney(req: Request, res: Response)
+{
+    totalMoney = 100;
+    currentBet = 50;
 
+    res.status(200).json({
+        totalMoney: totalMoney,
+        currentBet: currentBet
+    })
+}
+
+export function betting(req: Request, res: Response)
+{
+    const {amount} = req.body;
+
+    console.log("Amount: " + amount);
+    console.log("Total money: " + totalMoney);
+
+    if (amount <= 0) 
+    {
+        totalMoney = 100;
+        currentBet = 0;
+        return res.status(400).json({ message: "Invalid bet" });
+    }
+
+    if (amount > totalMoney) 
+    {
+        console.log("somehow here");
+        return res.status(400).json({ message: "Not enough money" });
+    }
+
+    currentBet = amount;
+    totalMoney -= amount;
+
+    res.status(200).json({
+        message: "Bet placed",
+        currentBet,
+        totalMoney,
+        phase: "playing"
+  });
+}
 
 function shuffleDeck(deck: Deck): void
 {
     const suits: Suit[] = ["spades" , "hearts" , "diamonds" , "clubs"];
     const ranks: Rank[] = ['2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' , '10' , 'jack' , 'queen' , 'king' , 'ace'];
-
+    
     for(const suit of suits)
     {
         for(const rank of ranks)
@@ -107,12 +181,28 @@ function resetGame(): void
     isGameGoing = true;
 }
 
+function calculateBetting(isBlackJack: boolean = false, isWin: boolean = false, isTie: boolean = false)
+{
+    if(isWin && isBlackJack)
+    {
+        totalMoney += currentBet * (2.5);
+    }
+    else if(isWin)
+    {
+        totalMoney += currentBet * 2;
+    }
+    else if(isTie)
+    {
+        totalMoney += currentBet;
+    }
 
+    currentBet = 0;
+}
 
 export function startGame(req: Request, res: Response)
 {
     resetGame();
-    console.log(isGameGoing)
+    console.log("blah" + isGameGoing)
     shuffleDeck(deck);
 
     for(let i = 0; i < 2; i++)
@@ -134,36 +224,43 @@ export function startGame(req: Request, res: Response)
     dealerHand.totalScore = findTotalScore(dealerHand);
     
     if(playerHand.totalScore === 21)
-    {
+    {   
         if(dealerHand.totalScore === 21)
         {
+            //isBlackjack, isWin, isTie
+            calculateBetting(true,false,true);
             return res.status(200).json({
                 message: "Blackjack! It's a push! Would you like to play again?",
                 playerHand: playerHand.cards,
                 dealerHand: dealerHand.cards,
                 playerScore: playerHand.totalScore,
                 dealerScore: dealerHand.totalScore,
-                remainingCards: deck.length
+                remainingCards: deck.length,
+                totalMoney: totalMoney,
             });
         }
+        calculateBetting(true,true);
         return res.status(200).json({
             message: "Blackjack! You win! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
     else if(dealerHand.totalScore === 21)
     {
+        calculateBetting();
         return res.status(200).json({
             message: "Dealer Blackjacked! You Lose! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
 
@@ -172,10 +269,11 @@ export function startGame(req: Request, res: Response)
         playerHand: playerHand.cards,
         dealerHand: [
             dealerHand.cards[0],
-            {suit: "hidden", value: "hidden"}
+            {suit: "hidden", rank: "hidden"}
         ],
         playerScore: playerHand.totalScore,
-        remainingCards: deck.length
+        remainingCards: deck.length,
+        totalMoney: totalMoney
     });
 }
 
@@ -194,18 +292,19 @@ export function hit(req: Request, res: Response)
     playerHand.cards.push(card);
 
     playerHand.totalScore = findTotalScore(playerHand);
-    console.log(playerHand.totalScore)
+    console.log("pop" + playerHand.totalScore)
     if(playerHand.totalScore > 21)
     {
         isGameGoing = false;
-
+        calculateBetting();
         return res.status(200).json({
             message: "You Busted! You Lose! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
     else if(playerHand.totalScore === 21)
@@ -218,7 +317,7 @@ export function hit(req: Request, res: Response)
         playerHand: playerHand.cards,
         dealerHand: [
             dealerHand.cards[0],
-            {suit: "hidden", value: "hidden"}
+            {suit: "hidden", rank: "hidden"}
         ],
         playerScore: playerHand.totalScore,
         remainingCards: deck.length
@@ -249,47 +348,55 @@ export function stand(req: Request, res: Response)
 
     if(dealerHand.totalScore > 21)
     {
+        calculateBetting(false,true,false);
         return res.status(200).json({
             message: "Dealer Busted! You Win! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
 
     if(playerHand.totalScore > dealerHand.totalScore)
     {
+        calculateBetting(false,true,false);
         return res.status(200).json({
             message: "Game Over! You Win! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
     else if(playerHand.totalScore < dealerHand.totalScore)
     {
+        calculateBetting();
         return res.status(200).json({
             message: "Game Over! You Lose! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
     else
     {
+        calculateBetting(false,false,true);
         return res.status(200).json({
             message: "Game Over! It's a push! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
 }
@@ -301,6 +408,14 @@ export function double(req: Request, res: Response)
         return res.send("Something went wrong when giving out cards.");
     } 
 
+    const doubledBet = currentBet * 2;
+    if(doubledBet > totalMoney + currentBet)
+    {
+        res.status(400).json("Not enough money to double.");
+    }
+
+    currentBet = doubledBet;
+
     const card: Card | undefined = deck.pop();
     if(!card) return res.send("Something went wrong when giving out cards.");   
     
@@ -308,17 +423,19 @@ export function double(req: Request, res: Response)
 
     playerHand.totalScore = findTotalScore(playerHand);
 
+
     if(playerHand.totalScore > 21)
     {
         isGameGoing = false;
-
+        calculateBetting();
         return res.status(200).json({
             message: "You Busted! You Lose! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
 
@@ -344,47 +461,55 @@ export function double(req: Request, res: Response)
 
     if(dealerHand.totalScore > 21)
     {
+        calculateBetting(false,true,false);
         return res.status(200).json({
             message: "Dealer Busted! You Win! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
 
-    if(playerHand.totalScore >= dealerHand.totalScore)
+    if(playerHand.totalScore > dealerHand.totalScore)
     {
+        calculateBetting(false, true, false);
         return res.status(200).json({
             message: "Game Over! You Win! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
     else if(playerHand.totalScore < dealerHand.totalScore)
     {
+        calculateBetting();
         return res.status(200).json({
             message: "Game Over! You Lose! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
     else
     {
+         calculateBetting(false, false, true);
         return res.status(200).json({
             message: "Game Over! It's a push! Would you like to play again?",
             playerHand: playerHand.cards,
             dealerHand: dealerHand.cards,
             playerScore: playerHand.totalScore,
             dealerScore: dealerHand.totalScore,
-            remainingCards: deck.length
+            remainingCards: deck.length,
+            totalMoney: totalMoney
         });
     }
 
